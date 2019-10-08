@@ -20,7 +20,9 @@ The following "flavors" are built from source and are intended for more advanced
 
 Starting with `1.13.6.1`, releases are tagged with `<openresty-version>-<image-version>-<flavor>`.  The latest `image-version` will also be tagged `<openresty-version>-<flavor>`.   The HEAD of the master branch is also labeled plainly as `<flavor>`.  The builds are managed by [Travis-CI](https://travis-ci.org/openresty/docker-openresty) and [Appveyor](https://ci.appveyor.com/project/openresty/docker-openresty) (for Windows images).
 
-It is *highly recommended* that you use the upstream-based images for best support.  For best stability, pin your images to the full tag, for example `1.13.6.2-0-xenial`.
+Starting with `1.15.8.1`, there are also `-nosse42` image flavors for systems which do not support SSE 4.2 (e.g. older systems and embedded systems).  They are built with `-mno-sse4.2` appended to the build arg `RESTY_LUAJIT_OPTIONS`.  It is highly recommended *NOT* to use these if your system supports SSE 4.2 because the `CRC32` instruction dramatically improves large string performance.  These are only for built-from-source flavors, e.g. `1.15.8.1-3-bionic-nosse42`, `1.15.8.1-3-alpine-nosse42`, `1.15.8.1-3-alpine-fat-nosse42`.
+
+It is *highly recommended* that you use the upstream-based images for best support.  For best stability, pin your images to the full tag, for example `1.15.8.1-3-bionic`.
 
 
 Table of Contents
@@ -32,6 +34,7 @@ Table of Contents
 * [OPM](#opm)
 * [LuaRocks](#luarocks)
 * [Tips & Pitfalls](#tips--pitfalls)
+* [Image Labels](#image-labels)
 * [Docker CMD](#docker-entrypoint)
 * [Building (from source)](#building-from-source)
 * [Building (RPM based)](#building-rpm-based)
@@ -65,6 +68,8 @@ docker run [options] openresty/openresty:stretch-fat
 *[options]* would be things like -p to map ports, -v to map volumes, and -d to daemonize.
 
 `docker-openresty` symlinks `/usr/local/openresty/nginx/logs/access.log` and `error.log` to `/dev/stdout` and `/dev/stderr` respectively, so that Docker logging works correctly.  If you change the log paths in your `nginx.conf`, you should symlink those paths as well. This is not possible with the `windows` image.
+
+Temporary directories such as `client_body_temp_path` are stored in `/var/run/openresty/`.  You may consider mounting that volume, rather than writing to a container-local directory.  This is not done for `windows`.
 
 
 Nginx Config Files
@@ -123,15 +128,65 @@ docker build -f xenial/Dockerfile --build-arg "RESTY_DEBIAN_BASE=armv7/armhf-ubu
 
  * By default, OpenResty is built with SSE4.2 optimizations if the build machine supports it.  If run on machine without SSE4.2, there will be [invalid opcode issues](https://github.com/openresty/docker-openresty/issues/39). **Thus all the Docker Hub images require SSE4.2.**  You can [build a custom image from source](#building-from-source) explicitly without SSE4.2 support, using build arguments like so:
 ```
-docker build -f xenial/Dockerfile --build-arg "RESTY_CONFIG_OPTIONS_MORE=--with-luajit-xcflags='-mno-sse4.2'" .
+docker build -f xenial/Dockerfile --build-arg "RESTY_LUAJIT_OPTIONS=--with-luajit-xcflags='-DLUAJIT_NUMMODE=2 -DLUAJIT_ENABLE_LUA52COMPAT -mno-sse4.2'" .
 ```
 
-* All of the image flavors use `OpenSSL 1.1.0h`.  Be careful of compatibility between
-  your `opm` and LuaRocks packages -- they must all use the same OpenSSL version.
+* OpenResty's OpenSSL library version must be compatible with your `opm` and LuaRocks packages' version.  At minimum, the numeric portion should be the same (e.g. `1.1.1`).  The image label `resty_openssl_version` indicates this value. see [Labels](#image-labels).
 
-* The `1.13.6.2-alpine` is built from `OpenSSL 1.0.2.k` because of build issues on Alpine.
+* The `1.13.6.2-alpine` is built from `OpenSSL 1.0.2r` because of build issues on Alpine. `1.15.8.1-alpine` is built from `OpenSSL 1.1.1c` on `Alpine 3.9`.
+
+* Windows images must be built from the same version as the host system it runs on.  See [Windows container version compatibility](https://docs.microsoft.com/en-us/virtualization/windowscontainers/deploy-containers/version-compatibility).  Our images are currently built from the "Windows Server 2016" series.
 
 * The `SIGQUIT` signal will be sent to nginx to stop this container, to give it an opportunity to stop gracefully (i.e, finish processing active connections).  The Docker default is `SIGTERM`, which immediately terminates active connections.   Note that if your configuration listens on UNIX domain sockets, this means that you'll need to manually remove the socket file upon shutdown, due to [nginx bug #753](https://trac.nginx.org/nginx/ticket/753).
+
+* Alpine 3.9 added OpenSSL 1.1.1 and we build images against this.  OpenSSL 1.1.1 enabled TLS 1.3 by default, which can create unexpected behavior with ssl_session_(store|fetch)_by_lua*. See this patch, which will ship in OpenResty 1.17.x.1, for more information: https://github.com/openresty/lua-nginx-module/commit/d3dbc0c8102a9978d649c99e3261d93aac547378
+
+Image Labels
+============
+
+The image builds are labeled with various information, such as the versions of OpenRestyand its dependent libraries.  Here's an example of printing the labels using [`jq`](https://stedolan.github.io/jq/):
+
+```
+$ docker pull openresty/openresty:1.15.8.1-1-alpine
+$ docker inspect openresty/openresty:1.15.8.1-1-alpine | jq '.[].Config.Labels'
+{
+  "maintainer": "Evan Wies <evan@*********.net>",
+  "resty_add_package_builddeps": "",
+  "resty_add_package_rundeps": "",
+  "resty_config_options": "    --with-file-aio     --with-http_addition_module     --with-http_auth_request_module     --with-http_dav_module     --with-http_flv_module     --with-http_geoip_module=dynamic     --with-http_gunzip_module     --with-http_gzip_static_module     --with-http_image_filter_module=dynamic     --with-http_mp4_module     --with-http_random_index_module     --with-http_realip_module     --with-http_secure_link_module     --with-http_slice_module     --with-http_ssl_module     --with-http_stub_status_module     --with-http_sub_module     --with-http_v2_module     --with-http_xslt_module=dynamic     --with-ipv6     --with-mail     --with-mail_ssl_module     --with-md5-asm     --with-pcre-jit     --with-sha1-asm     --with-stream     --with-stream_ssl_module     --with-threads     ",
+  "resty_config_options_more": "",
+  "resty_eval_post_make": "",
+  "resty_eval_pre_configure": "",
+  "resty_openssl_version": "1.0.2r",
+  "resty_pcre_version": "8.42",
+  "resty_version": "1.15.8.1"
+}
+```
+
+| Label Name                   | Description             |
+:----------------------------- |:----------------------- |
+|`maintainer`                  | Maintainer of the image |
+|`resty_add_package_builddeps` | buildarg `RESTY_ADD_PACKAGE_BUILDDEPS` |
+|`resty_add_package_rundeps`   | buildarg `RESTY_ADD_PACKAGE_RUNDEPS` |
+|`resty_config_deps`           | buildarg `_RESTY_CONFIG_DEPS` (internal) |
+|`resty_config_options`        | buildarg `RESTY_CONFIG_OPTIONS`  |
+|`resty_config_options_more`   | buildarg `RESTY_CONFIG_OPTIONS_MORE`  |
+|`resty_deb_flavor`            | buildarg `RESTY_DEB_FLAVOR`  |
+|`resty_deb_version`           | buildarg `RESTY_DEB_VERSION`  |
+|`resty_eval_post_make`        | buildarg `RESTY_EVAL_POST_MAKE`  |
+|`resty_eval_pre_configure`    | buildarg `RESTY_EVAL_PRE_CONFIGURE`  |
+|`resty_image_base`            | Name of the base image to build from, buildarg  `RESTY_IMAGE_BASE` |
+|`resty_image_tag`             | Tag of the base image to build from, buildarg `RESTY_IMAGE_TAG` |
+|`resty_install_base`          | buildarg `RESTY_INSTALL_BASE` |
+|`resty_install_tag`           | buildarg `RESTY_INSTALL_TAG` |
+|`resty_luajit_options`        | buildarg `RESTY_LUAJIT_OPTIONS` |
+|`resty_luarocks_version`      | buildarg `RESTY_LUAROCKS_VERSION`  |
+|`resty_openssl_version`       | buildarg `RESTY_OPENSSL_VERSION`  |
+|`resty_pcre_version`          | buildarg `RESTY_PCRE_VERSION`  |
+|`resty_rpm_arch`              | buildarg `RESTY_RPM_ARCH`  |
+|`resty_rpm_flavor`            | buildarg `RESTY_RPM_FLAVOR`  |
+|`resty_rpm_version`           | buildarg `RESTY_RPM_VERSION`  |
+|`resty_version`               | buildarg `RESTY_VERSION`  |
 
 
 Docker CMD
@@ -167,6 +222,7 @@ Dockerfiles are provided for the following base systems, selecting the Dockerfil
  * [Alpine](https://github.com/openresty/docker-openresty/blob/master/alpine/Dockerfile) (`alpine/Dockerfile`)
  * [Alpine Fat](https://github.com/openresty/docker-openresty/blob/master/alpine-fat/Dockerfile) (`alpine-fat/Dockerfile`)
  * [Ubuntu Xenial](https://github.com/openresty/docker-openresty/blob/master/xenial/Dockerfile) (`xenial/Dockerfile`)
+ * [Ubuntu Bionic](https://github.com/openresty/docker-openresty/blob/master/bionic/Dockerfile) (`bionic/Dockerfile`)
 
 We used to support more build flavors but have trimmed that down.  Older Dockerfiles are archived in the [`archive`](https://github.com/openresty/docker-openresty/tree/master/archive) folder.
 
@@ -180,13 +236,14 @@ docker build --build-arg RESTY_J=4 -f xenial/Dockerfile .
 | Key | Default | Description |
 :----- | :-----: |:----------- |
 |RESTY_IMAGE_BASE | "ubuntu" / "alpine" | The Debian or Alpine Docker image base to build `FROM`. |
-|RESTY_IMAGE_TAG  | { "xenial", "bionic" } / "3.8" | The Debian or Alpine Docker image tag to build `FROM`. |
-|RESTY_VERSION | 1.15.8.1rc1 | The version of OpenResty to use. |
-|RESTY_LUAROCKS_VERSION | 3.0.4 | The version of LuaRocks to use. |
-|RESTY_OPENSSL_VERSION | 1.1.0j  / 1.0.2r | The version of OpenSSL to use. |
-|RESTY_PCRE_VERSION | 8.42 | The version of PCRE to use. |
+|RESTY_IMAGE_TAG  | { "xenial", "bionic" } / "3.9" | The Debian or Alpine Docker image tag to build `FROM`. |
+|RESTY_VERSION | 1.15.8.2 | The version of OpenResty to use. |
+|RESTY_LUAROCKS_VERSION | 3.2.1 | The version of LuaRocks to use. |
+|RESTY_OPENSSL_VERSION | 1.1.0k  / 1.1.1c | The version of OpenSSL to use. |
+|RESTY_PCRE_VERSION | 8.43 | The version of PCRE to use. |
 |RESTY_J | 1 | Sets the parallelism level (-jN) for the builds. |
-|RESTY_CONFIG_OPTIONS | "--with-file-aio --with-http_addition_module --with-http_auth_request_module --with-http_dav_module --with-http_flv_module --with-http_geoip_module=dynamic --with-http_gunzip_module --with-http_gzip_static_module --with-http_image_filter_module=dynamic --with-http_mp4_module --with-http_perl_module=dynamic --with-http_random_index_module --with-http_realip_module --with-http_secure_link_module --with-http_slice_module --with-http_ssl_module --with-http_stub_status_module --with-http_sub_module --with-http_v2_module --with-http_xslt_module=dynamic --with-ipv6 --with-mail --with-mail_ssl_module --with-md5-asm --with-pcre-jit --with-sha1-asm --with-stream --with-stream_ssl_module --with-threads" | Options to pass to OpenResty's `./configure` script. |
+|RESTY_CONFIG_OPTIONS | "--with-compat --with-file-aio --with-http_addition_module --with-http_auth_request_module --with-http_dav_module --with-http_flv_module --with-http_geoip_module=dynamic --with-http_gunzip_module --with-http_gzip_static_module --with-http_image_filter_module=dynamic --with-http_mp4_module --with-http_perl_module=dynamic --with-http_random_index_module --with-http_realip_module --with-http_secure_link_module --with-http_slice_module --with-http_ssl_module --with-http_stub_status_module --with-http_sub_module --with-http_v2_module --with-http_xslt_module=dynamic --with-ipv6 --with-mail --with-mail_ssl_module --with-md5-asm --with-pcre-jit --with-sha1-asm --with-stream --with-stream_ssl_module --with-threads" | Options to pass to OpenResty's `./configure` script. |
+|RESTY_LUAJIT_OPTIONS | "--with-luajit-xcflags='-DLUAJIT_NUMMODE=2 -DLUAJIT_ENABLE_LUA52COMPAT'" | Options to tweak LuaJIT. |
 |RESTY_CONFIG_OPTIONS_MORE | "" | More options to pass to OpenResty's `./configure` script. |
 |RESTY_ADD_PACKAGE_BUILDDEPS | "" | Additional packages to install with package manager required by build only (removed after installation) |
 |RESTY_ADD_PACKAGE_RUNDEPS | "" | Additional packages to install with package manager required at runtime (not removed after installation) |
@@ -245,9 +302,9 @@ docker build --build-arg RESTY_RPM_FLAVOR="-debug" centos
 :----- | :-----: |:----------- |
 |RESTY_IMAGE_BASE | "centos" | The Centos Docker image base to build `FROM`. |
 |RESTY_IMAGE_TAG | "7" | The CentOS Docker image tag to build `FROM`. |
-|RESTY_LUAROCKS_VERSION | 2.4.4 | The version of LuaRocks to use. |
+|RESTY_LUAROCKS_VERSION | 3.2.1 | The version of LuaRocks to use. |
 |RESTY_RPM_FLAVOR | "" | The `openresty` package flavor to use.  Possibly `"-debug"` or `"-valgrind"`. |
-|RESTY_RPM_VERSION | 1.13.6.2-1.el7.centos | The `openresty` package version to install. |
+|RESTY_RPM_VERSION | 1.15.8.2-2.el7 | The `openresty` package version to install. |
 |RESTY_RPM_ARCH | x86_64 | The `openresty` package architecture to install. |
 
 [Back to TOC](#table-of-contents)
@@ -275,7 +332,7 @@ docker build --build-arg RESTY_DEB_FLAVOR="-debug" -f stretch/Dockerfile .
 |RESTY_IMAGE_BASE  | "debian" | The Debian Docker image base to build `FROM`. |
 |RESTY_IMAGE_TAG   | "stretch-slim" | The Debian Docker image tag to build `FROM`. |
 |RESTY_DEB_FLAVOR  | "" | The `openresty` package flavor to use.  Possibly `"-debug"` or `"-valgrind"`. |
-|RESTY_DEB_VERSION | "=1.13.6.2-1~stretch1" | The Debian package version to use, with `=` prepended. |
+|RESTY_DEB_VERSION | "=1.15.8.2-1~stretch1" | The Debian package version to use, with `=` prepended. |
 
 [Back to TOC](#table-of-contents)
 
@@ -295,7 +352,11 @@ docker build --build-arg RESTY_VERSION="1.13.6.2" -f windows/Dockerfile .
 
 | Key | Default | Description |
 :----- | :-----: |:----------- |
-|RESTY_VERSION | 1.13.6.2 | The version of OpenResty to use. |
+|RESTY_INSTALL_BASE | "microsoft/windowsservercore" | The Windows Server Docker image name to download and install OpenResty with. |
+|RESTY_INSTALL_TAG  | "ltsc2016" | The Windows Server Docker image name to download and install OpenResty with. |
+|RESTY_IMAGE_BASE   | "microsoft/nanoserver" | The Windows Server Docker image name to build `FROM` for final image. |
+|RESTY_IMAGE_TAG    | "sac2016" | The Windows Server Docker image tag to build `FROM` for final image. |
+|RESTY_VERSION      | 1.15.8.2 | The version of OpenResty to use. |
 
 [Back to TOC](#table-of-contents)
 
@@ -324,7 +385,7 @@ Copyright & License
 
 `docker-openresty` is licensed under the 2-clause BSD license.
 
-Copyright (c) 2017, Evan Wies <evan@neomantra.net>.
+Copyright (c) 2017-2019, Evan Wies <evan@neomantra.net>.
 
 This module is licensed under the terms of the BSD license.
 

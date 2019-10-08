@@ -9,15 +9,21 @@ FROM ${RESTY_IMAGE_BASE}:${RESTY_IMAGE_TAG}
 LABEL maintainer="Evan Wies <evan@neomantra.net>"
 
 ARG RESTY_IMAGE_BASE="centos"
-ARG RESTY_LUAROCKS_VERSION="3.0.4"
+ARG RESTY_IMAGE_TAG="7"
+ARG RESTY_LUAROCKS_VERSION="3.2.1"
 ARG RESTY_RPM_FLAVOR=""
-ARG RESTY_RPM_VERSION="1.15.8.1rc1-0.el7.centos"
+ARG RESTY_RPM_VERSION="1.15.8.2-2.el7"
 ARG RESTY_RPM_ARCH="x86_64"
 
+LABEL resty_image_base="${RESTY_IMAGE_BASE}"
+LABEL resty_image_tag="${RESTY_IMAGE_TAG}"
 LABEL resty_luarocks_version="${RESTY_LUAROCKS_VERSION}"
 LABEL resty_rpm_flavor="${RESTY_RPM_FLAVOR}"
 LABEL resty_rpm_version="${RESTY_RPM_VERSION}"
 LABEL resty_rpm_arch="${RESTY_RPM_ARCH}"
+
+# Volume for temporary files
+VOLUME ["/var/run/openresty"]
 
 RUN yum-config-manager --add-repo https://openresty.org/package/${RESTY_IMAGE_BASE}/openresty.repo \
     && yum install -y \
@@ -28,7 +34,7 @@ RUN yum-config-manager --add-repo https://openresty.org/package/${RESTY_IMAGE_BA
         openresty-resty-${RESTY_RPM_VERSION} \
         unzip \
     && cd /tmp \
-    && curl -fSL https://github.com/luarocks/luarocks/archive/${RESTY_LUAROCKS_VERSION}.tar.gz -o luarocks-${RESTY_LUAROCKS_VERSION}.tar.gz \
+    && curl -fSL https://luarocks.github.io/luarocks/releases/luarocks-${RESTY_LUAROCKS_VERSION}.tar.gz -o luarocks-${RESTY_LUAROCKS_VERSION}.tar.gz \
     && tar xzf luarocks-${RESTY_LUAROCKS_VERSION}.tar.gz \
     && cd luarocks-${RESTY_LUAROCKS_VERSION} \
     && ./configure \

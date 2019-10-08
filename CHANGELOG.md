@@ -1,6 +1,70 @@
 Changelog
 =========
 
+## 1.15.8.2-3
+
+ * Fix broken `alpine` logging
+ * Add `VOLUME` for temporary paths (#124) (but not for `windows`)
+
+## 1.15.8.2-2 (broken, do not use)
+
+ * Upgrade built-from-upstream packages (`stretch`, `centos`, `windows`) to 1.15.8.2
+ * Upgrade LuaRocks to 3.2.1 (#122)
+ * Move default writable temp paths to dedicated directories `/var/run/openresty` (#119)
+
+## 1.15.8.2-1 (untagged in git)
+
+ * Patch and build OpenSSL ourselves in built-from-source flavors (#117, #118)
+
+## 1.15.8.2-0 (untagged in git)
+
+For now (untagged release), the following only applies to built-from-source flavors (alpine/bionic/xenial). We are waiting for OpenResty upstream to release their packages for CentOS and Debian.
+
+ * Upgrade OpenResty to 1.15.8.2
+ * Upgrade PCRE to 8.43
+ * Upgrade OpenSSL 1.1.0 versions to 1.1.0k
+ * Download OpenResty source from github.com instead of openresty.org
+ * README note about OpenSSL 1.1.1 / TLS 1.3 issues with ssl_session_(store|fetch)_by_lua* (affects `alpine` flavor)
+
+## 1.15.8.1-4
+
+ * enable --with-compat NGINX option in source-built images (#114)
+
+## 1.15.8.1-3
+
+ * Fix PCRE issues by building it ourselves (#22, #108)
+ * Build Nginx with `-DNGX_LUA_ABORT_AT_PANIC` like upstream
+ * Add `RESTY_LUAJIT_OPTIONS` build arg for harmony with upstream
+     Defaults to `--with-luajit-xcflags='-DLUAJIT_NUMMODE=2 -DLUAJIT_ENABLE_LUA52COMPAT'`
+ * Tag `stretch` builds on `master` branch as the `latest` (#112)
+
+## 1.15.8.1-2
+
+ * Alpine upgraded to 3.9 with OpenSSL 1.1.1c (#94, #101)
+ * Upgrade LuaRocks to 3.1.3
+ * Windows installer and base images are more precisely specified and customizable
+ * Add Docker labels for the image bases and add some label documentation
+
+## 1.15.8.1-1
+
+ * Fixed an error caused by '"' in executing apt (#95)
+
+## 1.15.8.1-0
+
+ * Upgrade OpenResty to 1.15.8.1
+ * Add `-nosse42` builds to `alpine`, `xenial`, and `bionic` flavors (#103)
+
+## 1.15.8.1rc2-1
+
+ * Upgrade LuaRocks to 3.1.2 and change release URL (#100)
+ * Downgrade alpine base image to 3.8 until OpenSSL 1.1.1 works (#99)
+
+## 1.15.8.1rc2-0
+
+ * Upgrade Openresty to 1.15.8.1rc2
+ * Upgraded alpine base image to 3.9 (#94)
+ * Install `outils-md5` on `alpine-fat` (#98)
+
 ## 1.15.8.1rc1-0
 
  * Upgrade Openresty to 1.15.8.1rc1
